@@ -1,0 +1,56 @@
+from yahoo_fin import options
+import pandas as pd
+from xone import calendar
+from yahoo_fin import stock_info
+import numpy as np
+from scipy.stats import norm
+
+#fill in these first 6 lines with the relevant info, volatility, interest rate and dividend yield are percentages expressed as a deimal
+stock = 'spy'
+volatility = .15
+today_date = '07-08-2019'
+expiry = '20-09-2019'
+interestrate = .01
+dividendyield = .018
+chain = options.get_options_chain(stock, expiry)
+price = stock_info.get_live_price(stock) 
+
+
+def business_dates(start, end):
+    us_cal = calendar.USTradingCalendar()
+    kw = dict(start=start, end=end)
+    return pd.bdate_range(**kw).drop(us_cal.holidays(**kw))
+expiration = (len((business_dates(today_date, expiry)).value_counts())/252)
+
+dfcalls = pd.DataFrame(chain["calls"])
+dfcalls['ln'] = np.log(price/dfcalls['Strike'])
+tr = ((interestrate - dividendyield + (volatility**2))/2) * expiration
+sdsqt = volatility * (np.sqrt(expiration))
+dfcalls['d1'] = (dfcalls['ln']+tr) / sdsqt
+dfcalls['d2'] = (dfcalls['d1'] - sdsqt)
+
+ert = np.exp(-interestrate * expiration)
+eqt = np.exp(-dividendyield * expiration)
+dfcalls['xe-rt'] = dfcalls['Strike']*ert
+soeqt = eqt*price
+
+dfcalls['nd1'] = norm.cdf(dfcalls['d1'])
+dfcalls['n-d1'] = norm.cdf(-dfcalls['d1'])
+dfcalls['nd2'] = norm.cdf(dfcalls['d2'])
+dfcalls['n-d2'] = norm.cdf(-dfcalls['d2'])
+
+dfcalls['BS Price'] = (soeqt*dfcalls['nd1']) - (dfcalls['xe-rt']*dfcalls['nd2'])
+dfcalls['delta'] = (eqt * dfcalls['nd1'])
+dfcalls['gamma'] = np.exp((-1*dfcalls['d1']**2)/2) / (np.sqrt(2*np.pi))*(eqt/(price*sdsqt))
+
+dfcalls['theta'] = (-(price*np.exp((-1*dfcalls['d1']**2)/2)/(np.sqrt(2*np.pi)*volatility*eqt)/((2*np.sqrt(expiration))-(interestrate*dfcalls['xe-rt']*dfcalls['nd2'])+(dividendyield*price*dfcalls['nd1']*eqt))/252))
+
+dfcalls['vega'] = (np.exp(-1*dfcalls['d1']**2)/2) / np.sqrt(2*np.pi)*eqt*price*(np.sqrt(expiration)/100)
+
+dfcalls['rho'] = dfcalls['Strike']*expiration*ert*(dfcalls['nd2']/100)
+dfcalls['delta%'] = dfcalls['delta']*100
+
+#since there are 25 columns and computed BS at EVERY strike, one might need to be particular about what info you want to print
+#Following shows all practical strikes, at market option price (Ask), BS option price and the delta.
+#Best practice for reliable infor is to only run this script when the market is open
+print(dfcalls.iloc[80:120,[2, 5,19,25]])
