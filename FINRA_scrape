@@ -1,0 +1,88 @@
+#Following script scrapes short volume data from the FINRA website, for every stock on excahnges NYSE, NASDAQ since the start of 2019. 
+#The rationale for this is found in the description. The script currently executes only a plot of TSLA's Dark Pool Index. 
+#I intend to do something better in time
+
+import requests
+import pandas as pd
+import io
+from xone import calendar
+
+def business_dates(start, end):
+    us_cal = calendar.USTradingCalendar()
+    kw = dict(start=start, end=end)
+    return pd.bdate_range(**kw).drop(us_cal.holidays(**kw))
+
+#Adapt for desired start, end date
+expiration = business_dates('2019-01-01', '2019-08-06')
+mod = expiration.strftime("%Y%m%d")
+stringNASDAQ1 = "http://regsho.finra.org/FNQCshvol20190808.txt"
+stringNASDAQ2 = "http://regsho.finra.org/FNSQshvol20190808.txt"
+stringNYSE = "http://regsho.finra.org/FNYXshvol20190808.txt"
+
+a = []
+b = []
+c = []
+for i in mod:
+    a.append(stringNASDAQ1.replace("20190808", i))
+    b.append(stringNASDAQ2.replace("20190808", i))
+    c.append(stringNYSE.replace("20190808", i))    
+    
+duffyNASDAQ1 = []
+for i in a:
+    urlt = requests.get(i).content
+    new = (pd.read_csv(io.StringIO(urlt.decode('utf-8')), sep="|"))
+    duffyNASDAQ1.append(new)
+duffyNASDAQ2 = []
+for i in b:
+    urlt = requests.get(i).content
+    new = (pd.read_csv(io.StringIO(urlt.decode('utf-8')), sep="|"))
+    duffyNASDAQ2.append(new)
+duffyNYSE = []
+for i in c:
+    urlt = requests.get(i).content
+    new = (pd.read_csv(io.StringIO(urlt.decode('utf-8')), sep="|"))
+    duffyNYSE.append(new)
+    
+listNASDAQ1 = []
+dfNASDAQ1 = pd.DataFrame([], columns=['Date', 'Symbol', 'ShortVolume', 'ShortExemptVolume', 'TotalVolume', 'Market'])
+for i in duffyNASDAQ1:
+    listNASDAQ1.append(i)
+listNASDAQ1 = pd.concat(listNASDAQ1)
+
+listNASDAQ2 = []
+dfNASDAQ2 = pd.DataFrame([], columns=['Date', 'Symbol', 'ShortVolume', 'ShortExemptVolume', 'TotalVolume', 'Market'])
+for i in duffyNASDAQ2:
+    listNASDAQ2.append(i)
+listNASDAQ2 = pd.concat(listNASDAQ2)
+
+listNYSE = []
+dfNYSE = pd.DataFrame([], columns=['Date', 'Symbol', 'ShortVolume', 'ShortExemptVolume', 'TotalVolume', 'Market'])
+for i in duffyNYSE:
+    listNYSE.append(i)
+listNYSE = pd.concat(listNYSE)
+
+listNASDAQ1 = listNASDAQ1.dropna()
+listNASDAQ2 = listNASDAQ2.dropna()
+listNYSE = listNYSE.dropna()
+
+formaty = '%Y%m%d'
+
+listNASDAQ1['DateTime'] = pd.to_datetime(listNASDAQ1['Date'], format=formaty)
+listNASDAQ1 = listNASDAQ1.set_index(listNASDAQ1['DateTime'])
+listNASDAQ1_ = listNASDAQ1[['Symbol', 'ShortVolume', 'TotalVolume']]
+listNASDAQ1_['DPI'] = listNASDAQ1_['ShortVolume'] / listNASDAQ1_['TotalVolume']
+
+listNASDAQ2['DateTime'] = pd.to_datetime(listNASDAQ2['Date'], format=formaty)
+listNASDAQ2 = listNASDAQ2.set_index(listNASDAQ2['DateTime'])
+listNASDAQ2_ = listNASDAQ2[['Symbol', 'ShortVolume', 'TotalVolume']]
+listNASDAQ2_['DPI'] = listNASDAQ2_['ShortVolume'] / listNASDAQ2_['TotalVolume']
+
+listNYSE['DateTime'] = pd.to_datetime(listNYSE['Date'], format=formaty)
+listNYSE = listNYSE.set_index(listNYSE2['DateTime'])
+listNYSE_ = listNYSE[['Symbol', 'ShortVolume', 'TotalVolume']]
+listNYSE_['DPI'] = listNYSE_['ShortVolume'] / listNYSE_['TotalVolume']
+
+#adapt for desired stock
+stock = ['TSLA']
+xSTOCK = listNASDAQ2_[listNASDAQ2_['Symbol']==stock]
+xSTOCK['DPI'].plot()
