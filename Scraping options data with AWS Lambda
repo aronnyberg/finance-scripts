@@ -1,0 +1,36 @@
+#this code is for deployment on AWS Lambda.Therefore I have used only pure Python packages usable in AWS with a ZIP file installation
+
+
+import requests
+from datetime import datetime
+from dateutil.relativedelta import *
+import json
+import boto3
+def build_options_url(ticker):
+    
+#Constructs the future date value, minimum 2 weeks, 3rd friday of the month, for liquidity
+
+dateobj = TODAY = datetime.today()
+fdate = TODAY+relativedelta(weeks=2)+relativedelta(day=14, weekday=FR(+1))
+xdate = fdate.strftime('%d/%m/%Y')
+ydate = datetime.strptime(xdate, '%d/%m/%Y')
+finaldate = str(int(ydate.timestamp()))
+
+
+tickers = ['SPY', 'EEM', 'QQQ']
+
+#the following grabs entire html from yahoo finance, and deposits it in s3 under the 'key' of the current date
+
+for i in tickers:
+    try:
+        def lambda_handler(event=None, context=None):
+            ticker = i
+            url = "https://finance.yahoo.com/quote/" + ticker + "/options?p=" + ticker+ "&date=" + finaldate
+            page = requests.get(url).content
+            now = str(datetime.today())
+            client = boto3.client('s3')
+            response = client.put_object(Bucket='bigger-than-your-bucket', 
+					Body=page, Key=now)
+
+    except:
+        print(n)
