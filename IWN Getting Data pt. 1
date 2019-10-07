@@ -1,0 +1,35 @@
+import pandas as pd
+import numpy as np
+from yahoo_fin import stock_info
+
+#Following gets current portfolio constituents for IWN, get CSV at https://www.ishares.com/us/products/239712/ishares-russell-2000-value-etf/1467271812596.ajax?fileType=csv&fileName=IWN_holdings&dataType=fund
+iwn_names = pd.read_csv(r'C:\Users\nyber\Documents\IWN_holdings.csv', header=10)
+iwn_tickers = iwn_names['Ticker']
+
+#Reorgansise tickers by putting them in alist, deleting last 5 rows(useless info)
+tickerlist = []
+for i in iwn_tickers:
+    tickerlist.append(i)
+tickerlist2 = tickerlist[:-5]
+
+# This is the data-grabbing code, will take a long time 
+for i in tickerlist2:
+    try: 
+        iwn_stocks.append(stock_info.get_data(i, start_date='01/01/2016'))
+    except:
+        pass
+
+#Following is organising the data and putting it in a dataframe
+adf = pd.DataFrame(columns = ['open', 'high', 'low', 'close', 'adjclose', 'volume', 'ticker'])
+anotherlist = []
+for i in range(1000):
+    anotherlist.append(iwn_stocks[i])
+    
+df = pd.concat(anotherlist)
+df_adjclose = df[['adjclose', 'ticker']]
+df_adjclose.head()
+
+df_gb = pd.pivot_table(df_adjclose, values='adjclose', index='ticker', columns='date')
+
+#Storing our data
+df.to_pickle('iwn_2016to05092019_ALL.pkl')
