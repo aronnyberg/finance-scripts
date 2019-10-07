@@ -1,0 +1,20 @@
+#the following takes monthly yield data and computes total return, cumulated yields and price return, here for the US 10 year treasury 
+# from quandl. If looking at price history for equities is useless, looking at price for bonds is extra useless
+
+import quandl
+import numpy as np 
+import pandas as pd
+
+data = quandl.get("FRED/DGS10", collapse='monthly')
+df = pd.DataFrame(data)
+df.columns = ['yieldpa']
+df['price'] = 1 / df['yieldpa'] 
+df['yieldpm2'] = ((1 + df['yieldpa']**(1/12))-1)
+df['pricech'] = df['price'].pct_change()
+
+
+df['returns'] = df['pricech']*df['yieldpm2']
+
+df['bondTR'] = df['returns'].cumsum()
+
+df['bondTR'].plot()
