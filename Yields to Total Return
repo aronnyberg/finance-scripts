@@ -1,31 +1,29 @@
 #the following takes monthly yield data and computes total return, cumulated yields and price return, here for the US 10 year treasury 
 # from free yahoo finance api yahoo_fin. If looking at price history for equities is useless, looking at price for bonds is extra useless
-
+#the following symbolises the total return on a buy and hold framework
 import pandas as pd
 import numpy as np
 from yahoo_fin import stock_info
-#get the data
-tl = stock_info.get_data('^TNX')
-#find the first trading day of each month, on which we will receive yields
+#get data
+sp = stock_info.get_data('^GSPC')
+
+#the following selects the first trading day of every month, the day we apply the monthly yield
 tl['month'] = pd.to_datetime(tl.index).month
 tl['month_d'] = np.where((tl['month'].diff()) != 0, 1, 0)
 
-#finding capital gains part of bond returns
+#calculates the bond capital gain, % and log difference, the end result here will be log difference
 tl['price'] = 1 / tl['adjclose']
 tl['price_pct_change'] = tl['price'].pct_change()
-
-#converting annual yield to monthly
-tl['yield_pm'] = ((1 + tl['adjclose']**(1/12))-1)/100
-
-#finding log returns
 tl['log_change'] = np.log(tl['price']) - np.log(tl['price'].shift(1))
-#applying our dividends on first of each month
+
+#converts annual yield to monthly
+tl['yield_pa'] = tl['adjclose'] / 100
+tl['yield_pm'] = (((1 + tl['yield_pa'])**(1/12))-1)
+
+#the yield being applied
 tl['dividend'] = tl['month_d'] * tl['yield_pm']
 
 tl['return'] = tl['log_change'] + tl['dividend']
-
 tl['Log Total Return'] = tl['return'].cumsum()
-
 tl['Log Return_exyield'] = tl['log_change'].cumsum()
-
 tl['Accumulated Yield'] = tl['dividend'].cumsum()
