@@ -1,0 +1,49 @@
+import pandas as pd
+import numpy as np
+from yahoo_fin import stock_info
+df = pd.read_excel(r'C:\Users\nyber\Documents\bxmrollinfo.xls', header=1)
+df = df[['date', 'expr_date', 'old_strike', 'spx_10am', 'new_strike']]
+df = df.rename(columns={'new_strike':'bxm_new_strike'})
+
+df['put_new_strike'] = (df['bxm_new_strike'] - 5)
+
+#data = pd.read_csv('S&P_backtest_data')
+data = stock_info.get_data('^GSPC')
+
+data['5_day_return'] = data['adjclose'].pct_change(5)
+
+data = data.reset_index()
+df = df.reset_index()
+data['date'] = pd.to_datetime(data.date)
+df['date'] = pd.to_datetime(df.date)
+
+df = df.sort_values(by=['date'], ascending=False)
+data = data.sort_values(by=['date'], ascending=False)
+
+data = data.set_index('date')
+df = df.set_index('date')
+
+together = pd.concat([data, df], axis=1)
+together = together.dropna()
+together2 = together.tail(80)
+together2['-5day_level'] = together['close'] * (1 - together['5_day_return'])
+
+bxm = together2[['close', '5_day_return', 'expr_date', 'old_strike', 'bxm_new_strike', '-5day_level']]
+put = together2[['close', '5_day_return', 'expr_date', 'old_strike', 'put_new_strike', '-5day_level']]
+put['old_put_strike'] = (put['old_strike']-5)
+
+bxm['>_strike'] = np.where(bxm['-5day_level'] > bxm['old_strike'], 1, 0)
+bxm['n > strike'] = bxm['-5day_level'] - bxm['old_strike']
+bxm['returns'] = bxm['>_strike'] * bxm['5_day_return']
+bxm_over_strike_max = bxm['n > strike'].max()
+bxm['sized'] = bxm['n > strike'] / bxm_over_strike_max
+bxm['sized2'] = np.where((bxm['n > strike'] / bxm_over_strike_max) > 0.5, 1, 0)
+bxm['returns_sized'] = bxm['sized'] * bxm['returns']
+bxm['returns_sized2'] = bxm['sized2'] * bxm['returns']
+bxm['cum_returns'] = bxm['returns'].cumsum()
+bxm['cum_returns2'] = bxm['returns_sized'].cumsum()
+bxm['cum_returns3'] = bxm['returns_sized2'].cumsum()
+#bxm['returns'] = np.where(bxm['>_Strike'] == 1, bxm[''])
+
+put['<_strike'] = np.where(put['-5day_level'] < put['old_put_strike'], -1, 0)
+put['cum_returns'] = (put['<_strike'] * put['5_day_return']).cumsum()
