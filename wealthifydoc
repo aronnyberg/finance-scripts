@@ -1,0 +1,138 @@
+#Get data section
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from yahoo_fin import stock_info
+
+stock_list = ['SPY', 'TLT', 'GLD', 'BTC-USD']
+
+all_data = {ticker: stock_info.get_data(ticker)
+
+for ticker in stock_list}
+
+price = pd.DataFrame({ticker: data['adjclose']
+
+for ticker, data in all_data.items()})
+
+volume = pd.DataFrame({ticker: data['volume']
+
+  for ticker, data in all_data.items()})
+
+price = price.dropna(axis=0)
+returns = (price / price.shift(+1)) -1
+
+
+log_returns = np.log(returns + 1)
+
+returns2 = price.pct_change()
+
+#Markowitz mean variance preliminaries
+np.random.seed(42)
+
+ports_n = 10000
+
+all_weights = np.zeros((ports_n, len(stock_list)))
+return_array = np.zeros(ports_n)
+vol_array = np.zeros(ports_n)
+sharpe_array = np.zeros(ports_n)
+
+
+for i in range(ports_n):
+
+    weights = np.array(np.random.random(len(stock_list)))
+    weights = weights/np.sum(weights)
+    all_weights[i,:] = weights
+
+    return_array[i] = np.sum( (log_returns.mean() * weights * 252))
+
+    vol_array[i] = np.sqrt(np.dot(weights.T, np.dot(log_returns.cov()*252, weights)))
+
+    sharpe_array[i] = return_array[i]/vol_array[i]
+    
+weights = np.round(all_weights[sharpe_array.argmax()], 3)
+best_sharpe_return = return_array[sharpe_array.argmax()]
+best_sharpe_vol = vol_array[sharpe_array.argmax()]
+
+#Best Sharpe is..
+best_sharpe_return / best_sharpe_vol
+
+#Now plot Mean-Variance with best sharpe highlighted
+plt.scatter(vol_array, return_array)
+
+plt.xlabel('Volatility')
+
+plt.ylabel('Return')
+
+plt.scatter(best_sharpe_vol, best_sharpe_return,c='red', s=50) # red dot
+
+plt.show()
+
+#Rebalance returns workbook
+def rebalance_prem(price):
+    
+    price2 = price.dropna(axis=0)
+    returns = (price / price.shift(+1)) -1
+    
+    log_returns = np.log(returns + 1)
+    
+    log_returns['SPY'] = log_returns['SPY']
+    log_returns['TLT'] = log_returns['TLT']
+    log_returns['GLD'] = log_returns['GLD']
+    log_returns['BTC-USD'] = log_returns['BTC-USD']
+    
+    all_return = ((1+log_returns).mean(axis=1))-1
+    #all_return2 = log_returns.sum(axis=1)
+    
+    up = all_return[all_return > 0]
+    down = all_return[all_return < 0]
+    a = up.mean()
+    b = down.mean()
+    u=(1+a) #up gain
+    d=(1-b) # down loss
+    p = len(up) / len(all_return)
+    q = len(down) / len(all_return)
+    T = 100 #no. of rounds
+    L = (T*q)
+    W = 100 # initial wealth
+    w = 1 #fraction of wealth at risk, ie 1 = 100%
+    std = all_return.std()
+    mean = all_return.mean()
+    sharp = mean/std
+    
+    drift_w = 1+ w*((u**(T - L)) * ((d**L) -1))
+    fixed_w = (1+ w*a)**(T-L) * ((1-(w*b))**L)
+    
+    drift_feas = all_return.mean() - (all_return.std()*0.5)
+    reb_prem = fixed_w - drift_w
+    
+    adict = {'Property': ['Drift Weight Return', 'Fixed Weight Return', 'Rebalancing Premium', 'Drift Feasibility'], 
+             'Values': [drift_w, fixed_w, reb_prem, drift_feas]}
+        
+    df = pd.DataFrame(adict)
+    df = df.set_index('Property')
+    df.round(2)
+    return df
+#Show rebalance metrics
+rebalance_prem(price)
+
+#Payoff/Convexity plotter
+def get_payoff(x, y):
+    stock_x = log_returns[x]
+    stock_y = log_returns[y]
+    
+    n= 30
+    stock_x_r = stock_x.rolling(n, min_periods=n).apply(lambda x: np.prod(1+x)-1)
+    stock_y_r = stock_y.rolling(n, min_periods=n).apply(lambda x: np.prod(1+x)-1)
+    
+    a = stock_x_r.dropna()
+    b = stock_y_r.dropna()
+    
+    r = np.polyfit(a, b, 1)
+    r2 = np.polyfit(a, b, 2)
+    
+    plt.plot(a, b, 'o')
+    plt.plot(a,np.polyval(r, a), 'r-')
+    plt.plot(a,np.polyval(r2, a), 'b--')
+    
+#And operate with
+get_payoff('SPY', 'BTC-USD')
