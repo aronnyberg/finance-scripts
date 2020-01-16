@@ -1,0 +1,47 @@
+from scipy.stats import norm
+import numpy as np
+import datetime
+import math
+
+def find_vol(target_value, call_put, S, K, T, r):
+    iterations = 100
+    precision = 1.0e-5
+
+    sigma = 0.5
+    for i in range(0, iterations):
+        price = bs_price(call_put, S, K, T, r, sigma)
+        vega = bs_vega(call_put, S, K, T, r, sigma)
+
+        price = price
+        diff = target_value - price  # our root
+
+        print (i, sigma, diff)
+
+        if (abs(diff) < precision):
+            return sigma
+        sigma = sigma + diff/vega # f(x) / f'(x)
+
+    # value wasn't found, return best guess so far
+    return sigma
+    
+    
+    n = norm.pdf
+N = norm.cdf
+
+def bs_price(cp_flag,S,K,T,r,v,q=0.0):
+    d1 = (np.log(S/K)+(r+v*v/2.)*T)/(v*math.sqrt(T))
+    d2 = d1-v*math.sqrt(T)
+    if cp_flag == 'c':
+        price = S*np.exp(-q*T)*N(d1)-K*np.exp(-r*T)*N(d2)
+    else:
+        price = K*np.exp(-r*T)*N(-d2)-S*np.exp(-q*T)*N(-d1)
+    return price
+
+def bs_vega(cp_flag,S,K,T,r,v,q=0.0):
+    d1 = (np.log(S/K)+(r+v*v/2.)*T)/(v*math.sqrt(T))
+    return S * math.sqrt(T)*n(d1)
+    
+def bs_delta(cp_flag,S,K,T,r,v,q=0.0):
+       
+    d1 = (np.log(S/K)+(r+v*v/2.)*T)/(v*math.sqrt(T))
+    return np.exp(-q*T)*N(d1)  
