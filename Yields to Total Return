@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 from yahoo_fin import stock_info
 #get data
+tl = stock_info.get_data('^TNX')
 sp = stock_info.get_data('^GSPC')
 
 #the following selects the first trading day of every month, the day we apply the monthly yield
