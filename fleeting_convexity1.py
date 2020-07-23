@@ -15,6 +15,8 @@ def get_payoff(x, y):
     plt.plot(a, b, 'o')
     plt.plot(a,np.polyval(r, a), 'r-')
     plt.plot(a,np.polyval(r2, a), 'b--')
+    plt.ylabel(y.name)
+    plt.xlabel(x.name)
     
 iwn = stock_info.get_data('IWN')
 spy = stock_info.get_data('SPY')
