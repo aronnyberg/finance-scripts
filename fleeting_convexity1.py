@@ -1,5 +1,5 @@
 import pandas as pd
-from yahoo_fin import stock_info#
+from yahoo_fin import stock_info#yahoo finance data API
 from matplotlib import pyplot as plt
 import numpy as np
 def logRets(vals):
