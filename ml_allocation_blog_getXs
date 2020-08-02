@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-name_list = ['spxusd_minutely.pkl', 'udxusd_minutely.pkl', 'wtiusd_minutely.pkl', 'jpxjpy_minutely.pkl']
+name_list = ['spxusd_minutely.pkl', 'udxusd_minutely.pkl', 'wtiusd_minutely.pkl', 'jpxjpy_minutely.pkl'] #to replicate, first need to download these data from ml_allocation_blog_getData on this GitHub
 name_list_2 = []
 for dataname in name_list:
     shortname = dataname[:3]
