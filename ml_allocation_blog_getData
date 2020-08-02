@@ -1,0 +1,82 @@
+#pip install get_data_histdata from following link
+#https://github.com/philipperemy/FX-1-Minute-Data#data-files-provided-from-early-2000-to-june-2019
+
+import csv
+import os
+
+from get_data_histdata import download_hist_data
+
+
+def mkdir_p(path):
+    import errno
+    try:
+        os.makedirs(path)
+    except OSError as exc:
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
+def download_all(pair):
+    with open('get_data_pairs.csv', 'r') as f:
+        reader = csv.reader(f, delimiter=',')
+        next(reader, None)  # skip the headers
+        for row in reader:
+            if row[0] == pair:
+                currency_pair_name, pair, history_first_trading_month = row
+                year = int(history_first_trading_month[0:4])
+                print(currency_pair_name)
+                output_folder = os.path.join('output', pair)
+                mkdir_p(output_folder)
+                try:
+                    while True:
+                        could_download_full_year = False
+                        try:
+                            print('-', download_hist_data(year=year,
+                                                          pair=pair,
+                                                          output_directory=output_folder,
+                                                          verbose=False))
+                            could_download_full_year = True
+                        except AssertionError:
+                            pass  # lets download it month by month.
+                        month = 1
+                        while not could_download_full_year and month <= 12:
+                            print('-', download_hist_data(year=str(year),
+                                                          month=str(month),
+                                                          pair=pair,
+                                                          output_directory=output_folder,
+                                                          verbose=False))
+                            month += 1
+                        year += 1
+                except Exception:
+                    print('[DONE] for currency', currency_pair_name)
+            else:
+                #print('pair not found')
+                pass
+                
+if __name__ == '__main__':
+    download_all()
+    
+data = get_data_histdata2.download_all('SPX/USD') #Add specifc pairs you want here
+
+import pandas as pd
+from zipfile import ZipFile
+import os
+
+item = 'spxusd'
+df = pd.DataFrame(columns = ['Open', 'High', 'Low', 'Close'])
+for each in [i for i in os.listdir('/home/aron/output/'+item)]:
+    
+    zip_file = ZipFile('output/'+item+'/'+each)
+    dfs = {text_file.filename: pd.read_csv(zip_file.open(text_file.filename))
+       for text_file in zip_file.infolist()
+       if text_file.filename.endswith('.csv')}
+    df2 = dfs[each[:-3]+'csv'].iloc[:,0].str.split(' ', expand=True)
+    df3 = df2[0]
+    df4 = df2[1].str.split(';', expand=True)
+    df5 = pd.concat([df3, df4[[0,1,2,3,4]].rename(columns={0:'Time'})], axis=1).rename(columns={0:'Date', 1:'Open', 2:'High', 3:'Low', 4:'Close'})
+    df5 = df5.set_index(pd.to_datetime(df5['Date'] + ' ' + df5['Time']))[['Open', 'High', 'Low', 'Close']].astype(float)
+    df = pd.concat([df, df5], axis=0)
+    
+df.sort_index().to_pickle(item+'_minutely.pkl')
