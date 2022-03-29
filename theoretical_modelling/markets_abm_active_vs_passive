@@ -1,0 +1,153 @@
+"""Current iteration of the agent-based model. This one also models the interplay of 'passive' and 'active' players in the market.
+An interesting observation is the non-linear infaltionary impact of increasing passive share"""
+import numpy as np
+import statsmodels.api as sm
+%matplotlib inline
+import pandas as pd
+import matplotlib.pyplot as plt
+
+time = 1000
+participant_n = 1000
+stock_n = 1000 
+passive_stock_n = 250
+
+mu = 0.02    
+sigma = 0.015
+m_mu = 0.07
+m_sigma = 0.15
+
+participant_trading_daily = int(np.round(participant_n*0.1))
+stocks_each = 10        #Most sense will be with 10 stocks, as that would equal cash change of 10
+sell_cost = 0.01  #Cost of selling without match, damage mainly on stock price
+performance_distribution = 2.5 ##+/- on cash for top/bottom
+active_passive = [1,0]
+active_passive_means = [0.9, 1]
+stock_return_ = (np.random.normal(mu/np.sqrt(252), sigma/np.sqrt(252), (time,  stock_n)))
+stock_return_2 = stock_return_*((m_sigma-sigma)/sigma)
+stock_return_3 = stock_return_2+(((m_mu-mu)/np.sqrt(252)) - np.mean(stock_return_2))
+
+participant_pref_quarts = np.linspace(0,1,5)
+participant_value = np.zeros((time, participant_n))
+participant_cash = [[float(10)] for each in range(participant_n)]
+leverage = [[float(1)] for each in range(participant_n)]
+leverage_reduction = 0.9 #Cost of running out of cash, leverage reduction. Cost mainly on fund
+
+participant_ownership = [np.random.randint(stock_n, size=stocks_each) for i in range(participant_n)]
+orginal_participant_ownership = participant_ownership
+#passive_ownership = range(passive_stock_n)
+
+stock_return_arr = np.zeros((time, stock_n))
+t = 0
+while t < time-1:
+    for buyer in range(participant_n): #Adding 'economic' returns to participants
+        for b in participant_ownership[buyer]: #is time correct here?
+            active_flows_t = stock_return_3[t,:]*(1/participant_n)*active_passive[0]*active_passive_means[0]
+            passive_flows_t = stock_return_3[t,:passive_stock_n]*active_passive[1]*active_passive_means[1]
+            #stock_return_t = stock_return_[t]+active_flows_t
+            #stock_return_t[:passive_stock_n]+=passive_flows_t
+            #stock_return_arr[t,:] = stock_return_t
+            
+            stock_return_arr[t,:] = stock_return_[t]
+            stock_return_arr[t,:] += active_flows_t
+            stock_return_arr[t,:passive_stock_n] += passive_flows_t
+            participant_value[t][buyer]+=(stock_return_arr[t][b]*(leverage[buyer][0])*(np.size(participant_ownership[buyer][0])**-1))
+            stock_price_arr = [(10+np.cumsum(each)) for each in stock_return_arr]
+            
+    participant_bins = int(participant_n/4)
+    meetings = np.random.randint(participant_n,size=(participant_trading_daily, 2))
+    for meeting in meetings:#Meeting of valuation-motivated transactors
+        
+        #if participant_cash[meeting[1]][0] > 5: ## Does partic2 even have cash? Time-saver
+        partic_1_pref = participant_pref_quarts[int(meeting[0]/participant_bins)] #partic valuation pref
+        partic_2_pref = participant_pref_quarts[int(meeting[1]/participant_bins)]
+        partic_1_owns = participant_ownership[meeting[0]] ##What each partic owns
+        partic_2_owns = participant_ownership[meeting[1]]
+        ################ If price above preferences
+        for stock in partic_1_owns: #In this loop we're dealing with partic's stock 1by1
+            stock_price = stock_price_arr[t][stock]  
+            if stock_price > np.quantile(stock_price_arr[t], partic_1_pref*1.2):#Stock too expensive
+                if stock_price < np.quantile(stock_price_arr[t], partic_2_pref):#Will other guy buy?
+                    if participant_cash[meeting[1]][0] > stock_price: #Depends on cash
+                        np.delete(participant_ownership[meeting[0]],[stock])
+                        np.append(participant_ownership[meeting[1]],[stock])
+                        participant_cash[meeting[1]][0] -= stock_price
+                        participant_cash[meeting[0]][0] += stock_price
+
+                    else:
+                        stock_return_arr[t][stock]-=sell_cost #When partic2 has no cash, fire sale
+                        participant_value[t][meeting[0]]-=(sell_cost/len(participant_ownership[meeting[0]]))
+                        participant_ownership[meeting[0]] = np.delete(participant_ownership[meeting[0]],[stock])
+
+                else:
+                    stock_return_arr[t][stock]-=sell_cost #When partic2 has no cash, fire sale
+                    participant_value[t][meeting[0]]-=(sell_cost/len(participant_ownership[meeting[0]]))
+                    participant_ownership[meeting[0]] = np.delete(participant_ownership[meeting[0]],[stock])
+            #If price under preferences
+            if stock_price < np.quantile(stock_price_arr[t], partic_1_pref*0.8):
+                if stock_price < np.quantile(stock_price_arr[t], partic_2_pref):#Somewhat unfair,might be too low
+                    if participant_cash[meeting[1]][0] > stock_price: #Depends on cash
+                        np.delete(participant_ownership[meeting[0]],[stock])
+                        np.append(participant_ownership[meeting[1]],[stock])
+                        participant_cash[meeting[1]][0] -= stock_price
+                        participant_cash[meeting[0]][0] += stock_price
+
+                    else:
+                        stock_return_arr[t][stock]-=sell_cost #When partic2 has no cash, fire sale
+                        participant_value[t][meeting[0]]-=(sell_cost/len(participant_ownership[meeting[0]]))
+                        participant_ownership[meeting[0]] = np.delete(participant_ownership[meeting[0]],[stock])
+
+                else:
+                    stock_return_arr[t][stock]-=sell_cost #When partic2 has no cash, fire sale
+                    participant_value[t][meeting[0]]-=(sell_cost/len(participant_ownership[meeting[0]]))
+                    participant_ownership[meeting[0]] = np.delete(participant_ownership[meeting[0]],[stock])
+   
+            else:
+                pass
+            ##Rerouting funds according to performance
+            if t in np.unique([np.round(i/10) for i in range(time)])[1:]*10:
+                ranked = np.argsort(participant_value[t])
+                for best in ranked[:4]:
+                    participant_cash[best][0]+=performance_distribution
+                for worst in ranked[-4:]:
+                    participant_cash[worst][0]-=performance_distribution
+
+            cash_too_low = [] ##If cash <5 incur a penalty(sell securities) to gain cash back
+            cash_too_high = []
+            for peeps in participant_cash:
+                if peeps[0]-5 < 0:  #if anyone has under cash minimum
+                    #cash_too_low.append(participant_cash.index(peeps))
+                    crap = participant_cash.index(peeps)
+                    participant_cash[crap][0]+= np.mean(stock_price_arr[t])
+                    
+                    if leverage[crap][0] > 0.1:
+                        if np.size(participant_ownership[crap]) > 0: #Gets bailed out contingent on having stock to sell
+                            leverage[crap][0]*=leverage_reduction
+                            stock_return_arr[t+1][crap]-=(participant_value[t][crap] *(1-leverage_reduction)*(np.size(participant_ownership[crap][0])**-1))
+                        
+                        else: #If no cash and no stocks, out of the game
+                            leverage == 0  
+                            participant_cash[crap][0] == 0
+                    else:
+                        leverage == 0  
+                        participant_cash[crap][0] == 0
+
+                if peeps[0]-20 > 0:
+                    great = participant_cash.index(peeps)
+                    participant_cash[great][0]-= np.mean(stock_price_arr[t])
+                    if leverage[great][0] < 2:
+                        if np.size(participant_ownership[great]) > 0:
+                            leverage[great][0]*=(leverage_reduction**-1)
+                            stock_return_arr[t+1][great]+=(participant_value[t][great] *(1-leverage_reduction)*(np.size(participant_ownership[great][0])**-1))
+                        else:
+                            pass
+                    else:
+                        pass                        
+                else:
+                    pass        
+
+                    
+     
+    t+=1
+        
+#Add particpant cash change to value?
+#Need minimum cash balance, sell security otherwise

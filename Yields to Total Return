@@ -1,0 +1,32 @@
+#the following takes monthly yield data and computes total return, cumulated yields and price return, here for the US 10 year treasury 
+# from free yahoo finance api yahoo_fin. If looking at price history for equities is useless, looking at price for bonds is extra useless
+#the following symbolises the total return on a buy and hold framework
+import quandl 
+import pandas as pd
+from yahoo_fin import stock_info
+import numpy as np
+
+ts = quandl.get('FRED/GS10')
+sp = stock_info.get_data('^GSPC')
+
+def logRets(vals):
+    vals = vals.dropna()
+    ret = vals/vals.shift(1) -1
+    logRet = np.log(1+ret)
+    return logRet
+    
+ts1 = pd.Series()
+ts1['logBondReturn'] = logRets(1/ts)
+
+#converts1 annual yield to monthly
+ts1['yieldPerMonth'] = (((1+(ts*0.01))**(1/12))-1)
+
+ts1['return'] = ts1['logBondReturn'] + ts1['yieldPerMonth']
+ts1['totalReturn'] = ts1['return'].cumsum()
+ts1['totalReturnExYield'] = (ts1['logBondReturn']-ts1['yieldPerMonth']).cumsum()
+ts1['Accumulated Yield'] = ts1['yieldPerMonth'].cumsum()
+
+ts1['logBondReturn'].cumsum().plot()
+ts1['yieldPerMonth'].plot()
+ts1['totalReturn'].plot()
+ts1['Accumulated Yield'].plot()

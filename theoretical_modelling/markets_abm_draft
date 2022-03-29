@@ -1,0 +1,83 @@
+import numpy as np
+
+import statsmodels.api as sm
+%matplotlib inline
+import pandas as pd
+import matplotlib.pyplot as plt
+
+time = 10
+participant_n = 20
+stock_n = 50
+
+mu = 0.015
+sigma = 0.02
+init_participant = 100
+stocks_each = 4
+sell_cost = 0.005
+stock_return_arr = (np.random.normal(mu, sigma, (time,  stock_n)))
+stock_price_arr = [(10+np.cumsum(each)) for each in stock_return_arr]
+participant_chg_arr = np.zeros((time, participant_n))
+participant_pref_quarts = np.linspace(0,1,5)
+participant_value = np.zeros((time, participant_n))
+participant_cash = [[float(100)] for each in range(participant_n)]
+participant_ownership = [np.random.randint(stock_n, size=stocks_each) for i in range(participant_n)]
+
+t = 0
+while t < time:
+    for buyer in range(participant_n): #Adding 'economic' returns to participants
+        for b in participant_ownership[buyer]:
+            participant_value[t][buyer]+=stock_return_arr[t][b]  
+    
+    participant_bins = int(participant_n/4)
+    meeting = np.random.randint(participant_n,size=2)
+    if participant_cash[meeting[1]][0] > 0: ## Does partic1 even have cash? Time-saver
+        partic_1_pref = participant_pref_quarts[int(meeting[0]/participant_bins)] #partic valuation pref
+        partic_2_pref = participant_pref_quarts[int(meeting[1]/participant_bins)]
+        partic_1_owns = participant_ownership[meeting[0]] ##What each partic owns
+        partic_2_owns = participant_ownership[meeting[1]]
+        ######----
+        for stock in partic_1_owns: #In this loop we're dealing with partic's stock 1by1
+            stock_price = stock_price_arr[t][stock]  
+            if stock_price > np.quantile(stock_price_arr[t], partic_1_pref*1.2):#Stock too expensive
+                if stock_price < np.quantile(stock_price_arr[t], partic_2_pref):#Will other guy buy?
+                    if participant_cash[meeting[1]][0] > stock_price: #Depends on cash
+                        np.delete(participant_ownership[meeting[0]],[stock])
+                        np.append(participant_ownership[meeting[1]],[stock])
+                        participant_cash[meeting[1]][0] -= stock_price
+                        participant_cash[meeting[0]][0] += stock_price
+
+                    else:
+                        stock_price_arr[t,stock]-=sell_cost #When partic2 has no cash, fire sale
+                        participant_value[t][meeting[0]]-=sell_cost
+                        np.delete(participant_ownership[meeting[0]],[stock])
+                        
+                else:
+                    stock_price_arr[t][stock]-=sell_cost #Just doesn't want the damn stock, too expensive
+                    participant_value[t][meeting[0]]-=sell_cost
+                    np.delete(participant_ownership[meeting[0]],[stock])
+                    
+            ##############################
+            if stock_price < np.quantile(stock_price_arr[t], partic_1_pref*0.8):#Stock too expensive
+                if stock_price < np.quantile(stock_price_arr[t], partic_2_pref):#Somewhat unfair,might be too low
+                    if participant_cash[meeting[1]][0] > stock_price: #Depends on cash
+                        np.delete(participant_ownership[meeting[0]],[stock])
+                        np.append(participant_ownership[meeting[1]],[stock])
+                        participant_cash[meeting[1]][0] -= stock_price
+                        participant_cash[meeting[0]][0] += stock_price
+
+                    else:
+                        stock_price_arr[t,stock]-=sell_cost #When partic2 has no cash, fire sale
+                        participant_value[t][meeting[0]]-=sell_cost
+                        np.delete(participant_ownership[meeting[0]],[stock])
+                        
+                else:
+                    stock_price_arr[t][stock]-=sell_cost #Just doesn't want the damn stock, too expensive
+                    participant_value[t][meeting[0]]-=sell_cost
+                    np.delete(participant_ownership[meeting[0]],[stock])
+            else:
+                pass
+
+                    
+     
+    t+=1
+        

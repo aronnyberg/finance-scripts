@@ -1,0 +1,135 @@
+import pandas as pd
+import numpy as np
+import talib
+import matplotlib.pyplot as plt
+
+
+from sklearn.ensemble import RandomForestClassifier
+
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import cross_validate, cross_val_score, cross_val_predict
+from sklearn import metrics
+
+import shap
+
+sp_mins = pd.read_pickle('spxusd_minutely.pkl') #alter for your data
+sp_mins['Hour'] = sp_mins.index.hour
+sp_mins['Mins'] = sp_mins.index.minute
+sp_mins['Trigger'] = np.where((sp_mins['Hour']==10)&(sp_mins['Mins']==0),1,0)
+
+sp_mins['Indicator'] = talib.MOM(sp_mins['Close'])
+
+
+def spy_ml(dynamicWeighting, strategyType, longOrshort, days):
+    sp_mins['future4hour'] = np.log(sp_mins['Close'].shift(-days)) - np.log(sp_mins['Close']) #Trade length(in minutes)
+    if strategyType == 'mom':
+        sp_mins['Enacted'] = np.where((sp_mins['Trigger']==1)&(sp_mins['Indicator'] > 0.00), 1, 0)
+    if strategyType == 'mr':
+        sp_mins['Enacted'] = np.where((sp_mins['Trigger']==1)&(sp_mins['Indicator'] < 0.00), 1, 0)
+
+    sp_mins[sp_mins['Enacted']==1]['future4hour'].to_pickle('y_X.pkl')
+
+    spx = pd.read_pickle('spx_X.pkl')
+    udx = pd.read_pickle('udx_X.pkl')
+    wti = pd.read_pickle('wti_X.pkl')
+    jpx = pd.read_pickle('jpx_X.pkl')
+    df = pd.concat([spx, udx, wti, jpx], axis=1)
+    df2 = df.dropna(axis=0)
+
+    df2 = df2[df2.iloc[:,-1]==1]
+    y = pd.read_pickle('y_X.pkl')
+    y2 = y.tail(len(df2))
+    X = df2.values
+
+    X_train, X_test, y_train_, y_test_ = train_test_split(
+        X, y2, test_size=0.2, random_state=1)
+    X_train, X_val, y_train_, y_val_ = train_test_split(
+        X_train, y_train_, test_size=0.25, random_state=1)
+
+    if longORshort == 'long':
+        y_train = np.where(y_train_> 0, 1, 0)
+        y_test = np.where(y_test_> 0, 1, 0)
+        y_val = np.where(y_val_> 0, 1, 0)
+        
+    if longORshort == 'short':
+        y_train = np.where(y_train_< 0, 1, 0)
+        y_test = np.where(y_test_< 0, 1, 0)
+        y_val = np.where(y_val_< 0, 1, 0)
+        y_train_ = -y_train_
+        y_test_ = -y_test_
+        y_val_ = -y_val_          
+               
+    raw_strat = y_val_
+    raw_sharpe = (np.mean(raw_strat)/np.std(raw_strat))*np.sqrt(252)
+    raw_worst_trade = np.min(raw_strat)
+    raw_worst_drawdown = np.max(pd.Series(raw_strat).cumsum().rolling(100000, min_periods=1).max()-pd.Series(raw_strat).cumsum())#Should note that this series is split using train_test_split, so no fully reliable
+
+    clf = RandomForestClassifier(random_state=0)
+    clf.fit(X_train, y_train)
+    explainer = shap.TreeExplainer(clf)
+    shap_values = explainer.shap_values(X_test)
+    #shap_summary_plot = shap.summary_plot(shap_values, X_test)
+
+    vals= np.abs(shap_values).mean(0)
+    feature_importance = pd.DataFrame(list(zip(df2.columns, sum(vals))), columns=['col_name','feature_importance_vals'])
+    feature_importance.sort_values(by=['feature_importance_vals'], ascending=False,inplace=True)
+    best_features = feature_importance.head(20)['col_name'].values
+    df_new = df2[[i for i in best_features]]
+
+    strat_rets_list = []
+    strat_sharpe_list = []
+    strat_worst_trade_list = []
+    strat_worst_drawdown_list = []
+    for i in range(100):
+        clf = RandomForestClassifier(random_state=i)
+        clf.fit(X_test, y_test)
+        if dynamicWeighting == True:
+            predicts = [i[1] for i in clf.predict_proba(X_val)]
+        if dynamicWeighting == False:
+            predicts = clf.predict(X_val)
+        rets = y_val_.values
+        strat_rets = predicts*rets
+        strat_sharpe = (strat_rets.mean()/strat_rets.std())*np.sqrt(252)
+        strat_rets_list.append(strat_rets)
+        strat_sharpe_list.append(strat_sharpe)
+        strat_worst_trade = np.min(strat_rets)
+        strat_worst_drawdown = np.max(y.cumsum().rolling(100000, min_periods=1).max()-y.cumsum()) #Should note that this series is split using train_test_split, so no fully reliable
+        strat_worst_trade_list.append(strat_worst_trade)
+        strat_worst_drawdown_list.append(strat_worst_drawdown)
+        strat_n = pd.Series(strat_rets).count()
+    return dynamicWeighting, strategyType, longOrshort, days, np.mean(strat_sharpe_list), np.mean(strat_worst_trade_list), np.mean(strat_worst_drawdown_list),raw_sharpe, raw_worst_trade, raw_worst_drawdown, strat_n
+    
+ml_mean_sharpe_list = []
+ml_mean_worst_trade_list = []
+ml_mean_worst_drawdown_list = []
+control_sharpe_list = []
+control_worst_trade_list = []
+control_worst_drawdown_list = []
+
+dw_type_list = []
+strategy_type_list = []
+longorshort_list = []
+days_list = []
+strat_n_list = []
+
+for dynamicWeighting in [True, False]:
+    for strategyType in ['mom', 'mr']:
+        for longORshort in ['long', 'short']:
+            for days in [120, 240, 360]:
+                results = spy_ml(dynamicWeighting, strategyType, longORshort, days)
+                dw_type_list.append(results[0])
+                strategy_type_list.append(results[1])
+                longorshort_list.append(results[2])
+                days_list.append(results[3])
+                ml_mean_sharpe_list.append(results[4])
+                ml_mean_worst_trade_list.append(results[5])
+                ml_mean_worst_drawdown_list.append(results[6])
+                control_sharpe_list.append(results[7])
+                control_worst_trade_list.append(results[8])
+                control_worst_drawdown_list.append(results[9])
+                strat_n_list.append(results[10])
+                
+adf = pd.DataFrame({'dynamicWeighted?':dw_type_list, 'Strategy':strategy_type_list, 'Long or Short?':longorshort_list,
+             'TradeLength(Mins)':days_list, 'ML Sharpe':ml_mean_sharpe_list, 'ML Worst Trade':ml_mean_worst_trade_list,
+             'ML Worst Drawdown': ml_mean_worst_drawdown_list, 'Strategy N': strat_n_list, 'Control Sharpe':control_sharpe_list, 
+             'Control Worst Trade':control_worst_trade_list, 'Control Worst Drawdown': control_worst_drawdown_list})

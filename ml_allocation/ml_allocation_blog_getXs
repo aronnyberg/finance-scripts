@@ -1,0 +1,66 @@
+import pandas as pd
+import numpy as np
+
+name_list = ['spxusd_minutely.pkl', 'udxusd_minutely.pkl', 'wtiusd_minutely.pkl', 'jpxjpy_minutely.pkl'] #to replicate, first need to download these data from ml_allocation_blog_getData on this GitHub
+name_list_2 = []
+for dataname in name_list:
+    shortname = dataname[:3]
+    sp_mins = pd.read_pickle(dataname)
+    sp_mins['Hour'] = sp_mins.index.hour
+    sp_mins['Mins'] = sp_mins.index.minute
+    sp_mins['Trigger'] = np.where((sp_mins['Hour']==10)&(sp_mins['Mins']==0),1,0)
+    sp_mins['30MinRets'] = np.log(sp_mins['Close']/sp_mins['Close'].shift(29))
+    sp_mins['future4hour'] = np.log(sp_mins['Close']/sp_mins['Close'].shift(-240))
+    sp_mins['Enacted'] = np.where((sp_mins['Trigger']==1)&(sp_mins['30MinRets'] < 0.00), 1, 0)
+    -np.mean(sp_mins[sp_mins['Enacted']==1]['future4hour'])
+    df_max = sp_mins[['Open', 'High', 'Low', 'Close']].rolling(390).max()
+    df_min = sp_mins[['Open', 'High', 'Low', 'Close']].rolling(390).min()
+    df_mean = sp_mins[['Open', 'High', 'Low', 'Close']].rolling(390).mean()
+
+    df_max['Trigger'] = sp_mins['Trigger']
+    df_min['Trigger'] = sp_mins['Trigger']
+    df_mean['Trigger'] = sp_mins['Trigger']
+    df_max['Enacted'] = sp_mins['Enacted']
+
+    df_max['actClose'] = sp_mins['Close']
+    df_min['actClose'] = sp_mins['Close']
+    df_mean['actClose'] = sp_mins['Close']
+    df_max = df_max[df_max['Trigger']==1]
+    df_min = df_min[df_min['Trigger']==1]
+    df_mean = df_mean[df_mean['Trigger']==1]
+
+    df_max = df_max.dropna(axis=0)
+    df_min = df_min.dropna(axis=0)
+    df_mean = df_mean.dropna(axis=0)
+
+    df_X = pd.DataFrame()
+    df_X['Date'] = df_max.index
+    df_X.set_index('Date', inplace=True)
+
+    df_X[shortname+'meanChange_D'] = df_mean['Close'].pct_change()
+    df_X[shortname+'MeanClose-Current'] = (df_mean['Close'] - df_mean['actClose'])/df_mean['actClose']
+    df_X[shortname+'minClose-Current'] = (df_min['Close'] - df_min['actClose'])/df_min['actClose']
+    df_X[shortname+'maxClose-Current'] = (df_max['Close']-df_max['actClose'])/df_max['actClose']
+    df_X[shortname+'maxClose-minClose'] = (df_max['Close']-df_min['Close'])/df_min['Close']
+    df_X[shortname+'maxClose-meanClose'] = (df_max['Close']-df_mean['Close'])/df_mean['Close']
+
+    df_X[shortname+'meanCloseRoll20Day'] = df_mean['Close'].pct_change().rolling(20).mean()
+    df_X[shortname+'meanCloseRoll10Day'] = df_mean['Close'].pct_change().rolling(10).mean()
+    df_X[shortname+'meanCloseRoll5Day'] = df_mean['Close'].pct_change().rolling(5).mean()
+    df_X[shortname+'meanCloseRoll2Day'] = df_mean['Close'].pct_change().rolling(2).mean()
+
+    df_X[shortname+'RollMax-rollMean_20'] = (df_max['Close'].rolling(20).mean() - df_mean['Close'].rolling(20).mean())/df_mean['Close'].rolling(20).mean()
+    df_X[shortname+'RollMax-rollMean_10'] = (df_max['Close'].rolling(10).mean() - df_mean['Close'].rolling(10).mean())/df_mean['Close'].rolling(10).mean()
+    df_X[shortname+'RollMax-rollMean_5'] = (df_max['Close'].rolling(5).mean() - df_mean['Close'].rolling(5).mean())/df_mean['Close'].rolling(5).mean()
+    df_X[shortname+'RollMax-rollMean_2'] = (df_max['Close'].rolling(2).mean() - df_mean['Close'].rolling(2).mean())/df_mean['Close'].rolling(2).mean()
+
+    df_X[shortname+'RollMax-rollMin_20'] = (df_max['Close'].rolling(20).mean() - df_min['Close'].rolling(20).mean())/df_mean['Close'].rolling(20).mean()
+    df_X[shortname+'RollMax-rollMin_10'] = (df_max['Close'].rolling(10).mean() - df_min['Close'].rolling(10).mean())/df_mean['Close'].rolling(10).mean()
+    df_X[shortname+'RollMax-rollMin_5'] = (df_max['Close'].rolling(5).mean() - df_min['Close'].rolling(5).mean())/df_mean['Close'].rolling(5).mean()
+    df_X[shortname+'RollMax-rollMin_2'] = (df_max['Close'].rolling(2).mean() - df_min['Close'].rolling(2).mean())/df_mean['Close'].rolling(2).mean()
+    
+    df_X['Enacted'] = df_max['Enacted'].values
+    
+    datname = shortname+'_X.pkl'
+    name_list_2.append(datname)
+    df_X.to_pickle(datname)

@@ -1,0 +1,50 @@
+from yahoo_fin import options
+import pandas as pd
+from yahoo_fin import stock_info
+import datetime
+from dateutil.relativedelta import *
+import calendar
+import numpy as np
+
+#computes option skew as is academically defined(see notes), 
+def option_skew_grab(a, b):
+    stock = a
+    expiry_date = b
+    chain = options.get_options_chain(stock, expiry_date)
+    price = stock_info.get_live_price(stock) 
+    dfcalls = pd.DataFrame(chain["calls"])
+    dfputs = pd.DataFrame(chain["puts"])
+    def custom_round(x, base=0.5):
+        return int(base * round(float(x)/base))
+    atms = custom_round(price,base=0.5)
+    otms = custom_round((price * 0.95),base=0.5)
+    atmc = dfcalls.iloc[:,2]==atms
+    otmp = dfputs.iloc[:,2]==otms
+
+    atmcdata = dfcalls[atmc]
+    otmpdata = dfputs[otmp]
+    atmIVols = atmcdata.iloc[:,10]
+    otmIVols = otmpdata.iloc[:,10]
+
+    atmIVolf = float(atmIVols.iloc[0].strip('%'))
+    otmIVolf = float(otmIVols.iloc[0].strip('%'))
+    skew = otmIVolf - atmIVolf
+    print(skew)    
+
+#following automatically chooses date, chooses mid-month friday as a lot of automatic pograms rollover    
+TODAY = datetime.date.today()
+fdate = TODAY+relativedelta(day=14, weekday=FR(+1))
+xdate = fdate.strftime('%d/%m/%Y') 
+
+#operates skew grab across all the variables
+def many_grabs(variables, expiry):
+    for x in variables:
+        option_skew_grab(x, expiry)
+ 
+ #create list of choice stocks here
+sector_list = ['XLU', 'XLP', 'XLE', 'XLF', 'XLI', 'XLK', 'XLV', 'XLY', 'XLB', 'XLB', 'XOP', 'IYR', 'XHB', 'XRT']
+small_list = ['XLU', 'XLP']
+indices = ['spy', 'qqq']
+
+#operate all here
+many_grabs(indices, xdate)

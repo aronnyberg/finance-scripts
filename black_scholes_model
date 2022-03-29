@@ -1,0 +1,92 @@
+
+from yahoo_fin import options
+import pandas as pd
+from yahoo_fin import stock_info
+
+from scipy.stats import norm
+import numpy as np
+import datetime
+import math
+from xone import calendar
+stock = 'spy'
+c_or_p = 'c'
+strike_pc_out = 1.05
+today_date = '2020-01-16'
+expiry_date = '2020-02-21'
+rates = 0.001
+
+chain = options.get_options_chain(stock, expiry_date)
+price = stock_info.get_live_price(stock) 
+dfcalls = pd.DataFrame(chain["calls"])
+dfputs = pd.DataFrame(chain["puts"])
+
+n = norm.pdf
+N = norm.cdf
+
+def find_vol(target_value, call_put, S, K, T, r):
+    iterations = 100
+    precision = 1.0e-5
+
+    sigma = 0.5
+    for i in range(0, iterations):
+        price = bs_price(call_put, S, K, T, r, sigma)
+        vega = bs_vega(call_put, S, K, T, r, sigma)
+
+        price = price
+        diff = target_value - price  # our root
+
+        if (abs(diff) < precision):
+            return sigma
+        sigma = sigma + diff/vega # f(x) / f'(x)
+
+    # value wasn't found, return best guess so far
+    return sigma
+
+def bs_price(cp_flag,S,K,T,r,v,q=0.0):
+    d1 = (np.log(S/K)+(r+v*v/2.)*T)/(v*math.sqrt(T))
+    d2 = d1-v*math.sqrt(T)
+    if cp_flag == 'c':
+        price = S*np.exp(-q*T)*N(d1)-K*np.exp(-r*T)*N(d2)
+    else:
+        price = K*np.exp(-r*T)*N(-d2)-S*np.exp(-q*T)*N(-d1)
+    return price
+
+def bs_vega(cp_flag,S,K,T,r,v,q=0.0):
+    d1 = (np.log(S/K)+(r+v*v/2.)*T)/(v*math.sqrt(T))
+    return S * math.sqrt(T)*n(d1)
+
+def myround(x, base=5):
+    return int(base * round(float(x)/base))
+
+
+def business_dates(start, end):
+
+    us_cal = calendar.USTradingCalendar()
+
+    kw = dict(start=start, end=end)
+
+    return pd.bdate_range(**kw).drop(us_cal.holidays(**kw))
+
+def bs_delta(cp_flag,S,K,T,r,v,q=0.0):
+       
+    d1 = (np.log(S/K)+(r+v*v/2.)*T)/(v*math.sqrt(T))
+    return np.exp(-q*T)*N(d1)
+    
+    strike = myround(price*strike_pc_out)
+
+info = dfcalls[dfcalls.iloc[:,2] == strike]
+V_market = float(info['Last Price'])
+K = strike
+S = price
+r = rates
+cp = c_or_p
+T = (len(business_dates(today_date, expiry_date)) / 252)
+
+implied_vol = find_vol(V_market, cp, S, K, T, r)
+
+
+print('Implied vol: %.2f%%' % (implied_vol * 100))
+
+print('Market price = %.2f' % V_market)
+print('Model price = %.2f' % bs_price(cp, S, K, T, r, implied_vol))
+print('Delta = %.2f' % bs_delta(cp, S, K, T, r, implied_vol))
