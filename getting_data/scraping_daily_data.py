@@ -5,6 +5,8 @@ from sqlalchemy import create_engine
 import pymysql
 from config import sqlPath
 
+sqlPath = sqlPath+'stockData'
+
 def pulldatatoSQL(numberOfStocks, sqlPath, indexList):
     if indexList == 'IWN':
         stock_names = pd.read_csv('https://www.ishares.com/us/products/239712/ishares-russell-2000-value-etf/1467271812596.ajax?fileType=csv&fileName=IWN_holdings&dataType=fund',header=8)
