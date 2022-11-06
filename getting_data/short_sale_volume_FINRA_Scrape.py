@@ -5,8 +5,7 @@
 
 #This is a replication of the sqzme index published here https://squeezemetrics.com/monitor/dix?
 #With the methodology here https://squeezemetrics.com/monitor/download/pdf/short_is_long.pdf
-
-
+print('a')
 import requests
 import pandas as pd
 import io
@@ -22,7 +21,7 @@ def get_finra(start_date, end_date):
     stringNASDAQ1 = "http://regsho.finra.org/FNQCshvol20190808.txt"
     stringNASDAQ2 = "http://regsho.finra.org/FNSQshvol20190808.txt"
     stringNYSE = "http://regsho.finra.org/FNYXshvol20190808.txt"
-    
+
     a = []
     b = []
     c = []
@@ -89,4 +88,8 @@ def get_finra(start_date, end_date):
     
     picklename = 'finra'+mod[0]+'_'+ mod[-1] + '.pkl'
     
+    print('working')
+    print(thedfsort.head())
     thedfsort.to_pickle(picklename)
+
+get_finra('10/08/2019', '10/09/2019')

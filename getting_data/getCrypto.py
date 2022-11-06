@@ -3,6 +3,12 @@ import pandas as pd
 import time
 import matplotlib.pyplot as plt
 import datetime
+from config import sqlPath
+from config import sqlPassword
+from sqlalchemy import create_engine
+import pymysql
+
+sqlPath = sqlPath+'cryptoArbs'
 
 #coinbase = ccxt.coinbase()
 #coinbase.load_markets()
@@ -37,7 +43,6 @@ for each in ['ETH']:
     for base in ['USD', 'USDT', 'TUSD','GBP', 'EUR', 'JPY', 'ETH']:
         for exch in [binance, ftx, gemini, kraken, bitstamp, bitfinex]:
             try:
-                print(ticker)
                 ticker = each+'/'+base
                 get_candles(ticker, exch)
             except:
